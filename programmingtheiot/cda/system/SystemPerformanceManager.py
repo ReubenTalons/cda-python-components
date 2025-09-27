@@ -9,19 +9,13 @@
 # provided within in order to meet the needs of your specific
 # Programming the Internet of Things project.
 # 
-
 import logging
-
 from apscheduler.schedulers.background import BackgroundScheduler
-
 import programmingtheiot.common.ConfigConst as ConfigConst
-
 from programmingtheiot.common.ConfigUtil import ConfigUtil
 from programmingtheiot.common.IDataMessageListener import IDataMessageListener
-
 from programmingtheiot.cda.system.SystemCpuUtilTask import SystemCpuUtilTask
 from programmingtheiot.cda.system.SystemMemUtilTask import SystemMemUtilTask
-
 from programmingtheiot.data.SystemPerformanceData import SystemPerformanceData
 
 class SystemPerformanceManager(object):
@@ -29,18 +23,73 @@ class SystemPerformanceManager(object):
 	Shell representation of class for student implementation.
 	
 	"""
-
+	
 	def __init__(self):
-		pass
-
+		configUtil = ConfigUtil()
+		
+		self.pollRate = \
+			configUtil.getInteger( \
+				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.POLL_CYCLES_KEY, defaultVal = ConfigConst.DEFAULT_POLL_CYCLES)
+		
+		self.locationID = \
+			configUtil.getProperty( \
+				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.DEVICE_LOCATION_ID_KEY, defaultVal = ConfigConst.NOT_SET)
+		
+		if self.pollRate <= 0:
+			self.pollRate = ConfigConst.DEFAULT_POLL_CYCLES
+			
+		self.dataMsgListener = None
+		
+		# NOTE: The next four SLOC's are new for this task
+		self.scheduler = BackgroundScheduler()
+		self.scheduler.add_job( \
+			self.handleTelemetry, 'interval', seconds = self.pollRate, \
+			max_instances = 2, coalesce = True, misfire_grace_time = 15)
+		
+		self.cpuUtilTask = SystemCpuUtilTask()
+		self.memUtilTask = SystemMemUtilTask()
+		
 	def handleTelemetry(self):
-		pass
+		cpuUtilPct = self.cpuUtilTask.getTelemetryValue()
+		memUtilPct = self.memUtilTask.getTelemetryValue()
+		
+		logging.debug('CPU utilization is %s percent, and memory utilization is %s percent.', str(cpuUtilPct), str(memUtilPct))
 		
 	def setDataMessageListener(self, listener: IDataMessageListener) -> bool:
 		pass
 	
 	def startManager(self):
-		pass
+		logging.info("Starting SystemPerformanceManager...")
 		
+		if not self.scheduler.running:
+			self.scheduler.start()
+			logging.info("Started SystemPerformanceManager.")
+		else:
+			logging.warning("SystemPerformanceManager scheduler already started. Ignoring.")
+			
 	def stopManager(self):
-		pass
+		logging.info("Stopping SystemPerformanceManager...")
+		
+		try:
+			self.scheduler.shutdown()
+			logging.info("Stopped SystemPerformanceManager.")
+		except:
+			logging.warning("SystemPerformanceManager scheduler already stopped. Ignoring.")
+
+# Example usage code
+if __name__ == "__main__":
+	# Configure logging
+	logging.basicConfig(level=logging.INFO)
+	
+	# Create and test the SystemPerformanceManager
+	spm = SystemPerformanceManager()
+	
+	# Start the manager
+	spm.startManager()
+	
+	# You can add more test code here as needed
+	print(f"Poll Rate: {spm.pollRate}")
+	print(f"Location ID: {spm.locationID}")
+	
+	# Stop the manager
+	spm.stopManager()
