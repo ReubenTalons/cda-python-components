@@ -9,13 +9,17 @@
 # provided within in order to meet the needs of your specific
 # Programming the Internet of Things project.
 # 
+
 import argparse
 import logging
 import traceback
+
 from time import sleep
+
 import programmingtheiot.common.ConfigConst as ConfigConst
+
 from programmingtheiot.common.ConfigUtil import ConfigUtil
-from programmingtheiot.cda.system.SystemPerformanceManager import SystemPerformanceManager
+from programmingtheiot.cda.app.DeviceDataManager import DeviceDataManager
 
 logging.basicConfig(format = '%(asctime)s:%(name)s:%(levelname)s:%(message)s', level = logging.DEBUG)
 
@@ -33,7 +37,7 @@ class ConstrainedDeviceApp():
 		"""
 		logging.info("Initializing CDA...")
 		
-		self.sysPerfMgr = SystemPerformanceManager()
+		self.devDataMgr = DeviceDataManager()
 		self.isStarted = False
 		
 	def isAppStarted(self) -> bool:
@@ -48,20 +52,20 @@ class ConstrainedDeviceApp():
 		"""
 		logging.info("Starting CDA...")
 		
-		self.sysPerfMgr.startManager()
-		self.isStarted = True  # Added to track started state
+		self.devDataMgr.startManager()
+		self.isStarted = True
 		
 		logging.info("CDA started.")
 		
-	def stopApp(self, code: int = 0):  # Added default parameter
+	def stopApp(self, code: int = 0):
 		"""
 		Stop the CDA. Calls stopManager() on the device data manager instance.
 		
 		"""
 		logging.info("CDA stopping...")
 		
-		self.sysPerfMgr.stopManager()
-		self.isStarted = False  # Added to track stopped state
+		self.devDataMgr.stopManager()
+		self.isStarted = False
 		
 		logging.info("CDA stopped with exit code %s.", str(code))
 
