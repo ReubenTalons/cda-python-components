@@ -5,3 +5,4 @@
 **/wsl-venv
 **/piot-venv
 .venv
+/.pytest_cache/
