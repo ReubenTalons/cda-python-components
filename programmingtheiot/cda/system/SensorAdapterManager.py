@@ -27,9 +27,9 @@ from programmingtheiot.cda.sim.PressureSensorSimTask import PressureSensorSimTas
 
 class SensorAdapterManager(object):
 	"""
-	Shell representation of class for student implementation.
-	
+	Manages sensor adapters for simulated, emulated, and hardware sensors.
 	"""
+	
 	def __init__(self):
 		self.configUtil = ConfigUtil()
 		
@@ -40,6 +40,10 @@ class SensorAdapterManager(object):
 		self.useEmulator = \
 			self.configUtil.getBoolean( \
 				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_EMULATOR_KEY)
+		
+		self.useSenseHat = \
+			self.configUtil.getBoolean( \
+				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_SENSE_HAT_KEY)
 			
 		self.locationID = \
 			self.configUtil.getProperty( \
@@ -83,7 +87,42 @@ class SensorAdapterManager(object):
 			self.configUtil.getFloat( \
 				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.TEMP_SIM_CEILING_KEY, defaultVal = SensorDataGenerator.HI_NORMAL_INDOOR_TEMP)
 		
-		if not self.useEmulator:
+		# Check if using hardware I2C sensors
+		if self.useSenseHat:
+			logging.info("SensorAdapterManager configured for I2C hardware sensors.")
+			
+			# Load I2C sensor adapters
+			humidityI2cModule = import_module('programmingtheiot.cda.embedded.HumidityI2cSensorAdapterTask', 'HumidityI2cSensorAdapterTask')
+			humidityI2cClazz = getattr(humidityI2cModule, 'HumidityI2cSensorAdapterTask')
+			self.humidityAdapter = humidityI2cClazz()
+			
+			pressureI2cModule = import_module('programmingtheiot.cda.embedded.PressureI2cSensorAdapterTask', 'PressureI2cSensorAdapterTask')
+			pressureI2cClazz = getattr(pressureI2cModule, 'PressureI2cSensorAdapterTask')
+			self.pressureAdapter = pressureI2cClazz()
+			
+			tempI2cModule = import_module('programmingtheiot.cda.embedded.TemperatureI2cSensorAdapterTask', 'TemperatureI2cSensorAdapterTask')
+			tempI2cClazz = getattr(tempI2cModule, 'TemperatureI2cSensorAdapterTask')
+			self.tempAdapter = tempI2cClazz()
+			
+		elif self.useEmulator:
+			logging.info("SensorAdapterManager configured for emulated sensors.")
+			
+			# Load emulator sensor adapters
+			humidityEmulatorModule = import_module('programmingtheiot.cda.emulated.HumiditySensorEmulatorTask', 'HumiditySensorEmulatorTask')
+			humidityEmulatorClazz = getattr(humidityEmulatorModule, 'HumiditySensorEmulatorTask')
+			self.humidityAdapter = humidityEmulatorClazz()
+			
+			pressureEmulatorModule = import_module('programmingtheiot.cda.emulated.PressureSensorEmulatorTask', 'PressureSensorEmulatorTask')
+			pressureEmulatorClazz = getattr(pressureEmulatorModule, 'PressureSensorEmulatorTask')
+			self.pressureAdapter = pressureEmulatorClazz()
+			
+			tempEmulatorModule = import_module('programmingtheiot.cda.emulated.TemperatureSensorEmulatorTask', 'TemperatureSensorEmulatorTask')
+			tempEmulatorClazz = getattr(tempEmulatorModule, 'TemperatureSensorEmulatorTask')
+			self.tempAdapter = tempEmulatorClazz()
+			
+		else:
+			logging.info("SensorAdapterManager configured for simulated sensors.")
+			
 			self.dataGenerator = SensorDataGenerator()
 			
 			humidityData = \
@@ -121,6 +160,9 @@ class SensorAdapterManager(object):
 	def setDataMessageListener(self, listener: IDataMessageListener) -> bool:
 		if listener:
 			self.dataMsgListener = listener
+			return True
+		
+		return False
 
 	def startManager(self):
 		logging.info("Started SensorAdapterManager.")
