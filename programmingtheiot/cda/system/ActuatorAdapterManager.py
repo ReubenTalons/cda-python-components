@@ -25,8 +25,7 @@ from programmingtheiot.cda.sim.HumidifierActuatorSimTask import HumidifierActuat
 
 class ActuatorAdapterManager(object):
 	"""
-	Shell representation of class for student implementation.
-	
+	Manages actuator adapters for both simulated and emulated actuators.
 	"""
 	
 	def __init__(self, dataMsgListener: IDataMessageListener = None):
@@ -60,6 +59,21 @@ class ActuatorAdapterManager(object):
 			
 			# create the HVAC actuator
 			self.hvacActuator = HvacActuatorSimTask()
+		else:
+			# load the humidifier actuator emulator
+			hueModule = import_module('programmingtheiot.cda.emulated.HumidifierEmulatorTask', 'HumidifierEmulatorTask')
+			hueClazz = getattr(hueModule, 'HumidifierEmulatorTask')
+			self.humidifierActuator = hueClazz()
+			
+			# create the HVAC actuator emulator
+			hveModule = import_module('programmingtheiot.cda.emulated.HvacEmulatorTask', 'HvacEmulatorTask')
+			hveClazz = getattr(hveModule, 'HvacEmulatorTask')
+			self.hvacActuator = hveClazz()
+			
+			# create the LED display actuator emulator
+			leDisplayModule = import_module('programmingtheiot.cda.emulated.LedDisplayEmulatorTask', 'LedDisplayEmulatorTask')
+			leClazz = getattr(leDisplayModule, 'LedDisplayEmulatorTask')
+			self.ledDisplayActuator = leClazz()
 	
 	def sendActuatorCommand(self, data: ActuatorData) -> ActuatorData:
 		if data and not data.isResponseFlagEnabled():
@@ -90,3 +104,6 @@ class ActuatorAdapterManager(object):
 	def setDataMessageListener(self, listener: IDataMessageListener) -> bool:
 		if listener:
 			self.dataMsgListener = listener
+			return True
+		
+		return False
