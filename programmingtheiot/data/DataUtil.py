@@ -10,6 +10,8 @@
 # Programming the Internet of Things project.
 # 
 
+import json
+
 from json import JSONEncoder
 
 from programmingtheiot.data.ActuatorData import ActuatorData
@@ -18,31 +20,128 @@ from programmingtheiot.data.SystemPerformanceData import SystemPerformanceData
 
 class DataUtil():
 	"""
-	Shell representation of class for student implementation.
+	Utility class for converting data objects to/from JSON.
 	
 	"""
-
 	def __init__(self, encodeToUtf8 = False):
-		pass
+		self.encodeToUtf8 = encodeToUtf8
 	
 	def actuatorDataToJson(self, data: ActuatorData = None):
-		pass
+		"""
+		Converts ActuatorData to JSON string.
+		"""
+		if data:
+			jsonData = json.dumps(data, cls=JsonDataEncoder)
+			return jsonData
+		else:
+			return None
 	
 	def sensorDataToJson(self, data: SensorData = None):
-		pass
-
+		"""
+		Converts SensorData to JSON string.
+		"""
+		if data:
+			jsonData = json.dumps(data, cls=JsonDataEncoder)
+			return jsonData
+		else:
+			return None
+	
 	def systemPerformanceDataToJson(self, data: SystemPerformanceData = None):
-		pass
+		"""
+		Converts SystemPerformanceData to JSON string.
+		"""
+		if data:
+			jsonData = json.dumps(data, cls=JsonDataEncoder)
+			return jsonData
+		else:
+			return None
 	
 	def jsonToActuatorData(self, jsonData: str = None):
-		pass
+		"""
+		Converts JSON string to ActuatorData object.
+		"""
+		if jsonData:
+			jsonStruct = json.loads(jsonData)
+			data = ActuatorData()
+			
+			self._updateIotData(data, jsonStruct)
+			
+			# Preserve timestamp from JSON - MUST BE AFTER setValue/setCommand/setStateData!
+			if 'timeStamp' in jsonStruct:
+				data.timeStamp = jsonStruct['timeStamp']
+			
+			return data
+		else:
+			return None
 	
 	def jsonToSensorData(self, jsonData: str = None):
-		pass
+		"""
+		Converts JSON string to SensorData object.
+		"""
+		if jsonData:
+			jsonStruct = json.loads(jsonData)
+			data = SensorData()
+			
+			self._updateIotData(data, jsonStruct)
+			
+			# Preserve timestamp from JSON - MUST BE AFTER setValue!
+			if 'timeStamp' in jsonStruct:
+				data.timeStamp = jsonStruct['timeStamp']
+			
+			return data
+		else:
+			return None
 	
 	def jsonToSystemPerformanceData(self, jsonData: str = None):
-		pass
+		"""
+		Converts JSON string to SystemPerformanceData object.
+		"""
+		if jsonData:
+			jsonStruct = json.loads(jsonData)
+			data = SystemPerformanceData()
+			
+			self._updateIotData(data, jsonStruct)
+			
+			if 'cpuUtil' in jsonStruct:
+				data.setCpuUtilization(jsonStruct['cpuUtil'])
+			if 'memUtil' in jsonStruct:
+				data.setMemoryUtilization(jsonStruct['memUtil'])
+			
+			# Preserve timestamp from JSON - MUST BE AFTER setCpuUtilization/setMemoryUtilization!
+			if 'timeStamp' in jsonStruct:
+				data.timeStamp = jsonStruct['timeStamp']
+			
+			return data
+		else:
+			return None
 	
+	def _updateIotData(self, data, jsonStruct):
+		"""
+		Helper method to update common IoT data fields from JSON.
+		"""
+		if 'name' in jsonStruct:
+			data.setName(jsonStruct['name'])
+		if 'typeID' in jsonStruct:
+			data.setTypeID(jsonStruct['typeID'])
+		if 'statusCode' in jsonStruct:
+			data.setStatusCode(jsonStruct['statusCode'])
+		if 'locationID' in jsonStruct:
+			data.setLocationID(jsonStruct['locationID'])
+		if 'latitude' in jsonStruct:
+			data.setLatitude(jsonStruct['latitude'])
+		if 'longitude' in jsonStruct:
+			data.setLongitude(jsonStruct['longitude'])
+		if 'elevation' in jsonStruct:
+			data.setElevation(jsonStruct['elevation'])
+		
+		# For SensorData and ActuatorData
+		if 'value' in jsonStruct:
+			data.setValue(jsonStruct['value'])
+		if 'command' in jsonStruct:
+			data.setCommand(jsonStruct['command'])
+		if 'stateData' in jsonStruct:
+			data.setStateData(jsonStruct['stateData'])
+
 class JsonDataEncoder(JSONEncoder):
 	"""
 	Convenience class to facilitate JSON encoding of an object that
@@ -51,4 +150,3 @@ class JsonDataEncoder(JSONEncoder):
 	"""
 	def default(self, o):
 		return o.__dict__
-	
