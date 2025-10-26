@@ -50,6 +50,11 @@ class DeviceDataManager(IDataMessageListener):
 		# NOTE: this can also be retrieved from the configuration file
 		self.enableActuation = True
 		
+		# NEW: Enable MQTT client based on configuration
+		self.enableMqttClient = \
+			self.configUtil.getBoolean( \
+				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_MQTT_CLIENT_KEY)
+		
 		self.sysPerfMgr = None
 		self.sensorAdapterMgr = None
 		self.actuatorAdapterMgr = None
@@ -58,6 +63,12 @@ class DeviceDataManager(IDataMessageListener):
 		self.mqttClient = None
 		self.coapClient = None
 		self.coapServer = None
+		
+		# NEW: Initialize MQTT client if enabled
+		if self.enableMqttClient:
+			self.mqttClient = MqttClientConnector()
+			self.mqttClient.setDataMessageListener(self)
+			logging.info("MQTT client enabled and initialized")
 		
 		# Initialize caches for data
 		self.actuatorResponseCache = {}
@@ -231,6 +242,11 @@ class DeviceDataManager(IDataMessageListener):
 	def startManager(self):
 		logging.info("Starting DeviceDataManager...")
 		
+		# NEW: Connect MQTT client and subscribe to topics
+		if self.mqttClient:
+			self.mqttClient.connectClient()
+			self.mqttClient.subscribeToTopic(ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE, callback = None, qos = ConfigConst.DEFAULT_QOS)
+		
 		if self.sysPerfMgr:
 			self.sysPerfMgr.startManager()
 		
@@ -241,6 +257,11 @@ class DeviceDataManager(IDataMessageListener):
 		
 	def stopManager(self):
 		logging.info("Stopping DeviceDataManager...")
+		
+		# NEW: Unsubscribe and disconnect MQTT client
+		if self.mqttClient:
+			self.mqttClient.unsubscribeFromTopic(ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE)
+			self.mqttClient.disconnectClient()
 		
 		if self.sysPerfMgr:
 			self.sysPerfMgr.stopManager()
