@@ -6,7 +6,6 @@
 #
 # IMPORTANT: Edit this file to meet your local system requirements.
 #
-
 #
 # MQTT client configuration information
 #
@@ -20,7 +19,6 @@ defaultQoS     = 0
 keepAlive      = 60
 enableAuth     = False
 enableCrypt    = False
-
 #
 # CoAP client configuration information
 #
@@ -32,7 +30,6 @@ port           = 5683
 securePort     = 5684
 enableAuth     = False
 enableCrypt    = False
-
 #
 # CDA specific configuration information
 #
@@ -41,7 +38,7 @@ deviceLocationID = constraineddevice001
 enableEmulator   = True
 enableSenseHAT   = False
 enableMqttClient = True
-enableCoapServer = False
+enableCoapServer = True
 enableCoapClient = False
 enableSystemPerformance = True
 enableSensing    = False
@@ -50,7 +47,6 @@ pollCycleSecs    = 5
 testGdaDataPath  = /tmp/gda-data
 testCdaDataPath  = /tmp/cda-data
 testEmptyApp     = False
-
 # configurable limits for sensor simulation
 humiditySimFloor   =   35.0
 humiditySimCeiling =   45.0
@@ -58,12 +54,10 @@ pressureSimFloor   =  990.0
 pressureSimCeiling = 1010.0
 tempSimFloor       =   15.0
 tempSimCeiling     =   25.0
-
 # configurable limits for actuator triggers
 handleTempChangeOnDevice = True
 triggerHvacTempFloor     = 18.0
 triggerHvacTempCeiling   = 20.0
-
 # camera settings
 streamHostAddr      = 127.0.0.1
 streamHostLabel     = localhost

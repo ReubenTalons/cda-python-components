@@ -20,6 +20,7 @@ from programmingtheiot.common.ResourceNameEnum import ResourceNameEnum
 
 from programmingtheiot.cda.connection.CoapClientConnector import CoapClientConnector
 from programmingtheiot.cda.connection.MqttClientConnector import MqttClientConnector
+from programmingtheiot.cda.connection.AsyncCoapServerAdapter import AsyncCoapServerAdapter
 
 from programmingtheiot.cda.system.ActuatorAdapterManager import ActuatorAdapterManager
 from programmingtheiot.cda.system.SensorAdapterManager import SensorAdapterManager
@@ -54,6 +55,11 @@ class DeviceDataManager(IDataMessageListener):
 		self.enableMqttClient = \
 			self.configUtil.getBoolean( \
 				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_MQTT_CLIENT_KEY)
+
+		# NEW: Enable CoAP server based on configuration
+		self.enableCoapServer = \
+			self.configUtil.getBoolean( \
+				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_COAP_SERVER_KEY)
 		
 		self.sysPerfMgr = None
 		self.sensorAdapterMgr = None
@@ -69,6 +75,11 @@ class DeviceDataManager(IDataMessageListener):
 			self.mqttClient = MqttClientConnector()
 			self.mqttClient.setDataMessageListener(self)
 			logging.info("MQTT client enabled and initialized")
+
+		# NEW: Initialize CoAP server if enabled
+		if self.enableCoapServer:
+			self.coapServer = AsyncCoapServerAdapter(dataMsgListener = self)
+			logging.info("Async CoAP server enabled and initialized")
 		
 		# Initialize caches for data
 		self.actuatorResponseCache = {}
@@ -246,6 +257,10 @@ class DeviceDataManager(IDataMessageListener):
 		if self.mqttClient:
 			self.mqttClient.connectClient()
 			self.mqttClient.subscribeToTopic(ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE, callback = None, qos = ConfigConst.DEFAULT_QOS)
+
+		# NEW: Start CoAP server
+		if self.coapServer:
+			self.coapServer.startServer()
 		
 		if self.sysPerfMgr:
 			self.sysPerfMgr.startManager()
@@ -262,6 +277,10 @@ class DeviceDataManager(IDataMessageListener):
 		if self.mqttClient:
 			self.mqttClient.unsubscribeFromTopic(ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE)
 			self.mqttClient.disconnectClient()
+
+		# NEW: Stop CoAP server
+		if self.coapServer:
+			self.coapServer.stopServer()
 		
 		if self.sysPerfMgr:
 			self.sysPerfMgr.stopManager()
