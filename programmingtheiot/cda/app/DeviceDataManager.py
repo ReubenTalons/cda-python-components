@@ -19,6 +19,7 @@ from programmingtheiot.common.IDataMessageListener import IDataMessageListener
 from programmingtheiot.common.ResourceNameEnum import ResourceNameEnum
 
 from programmingtheiot.cda.connection.CoapClientConnector import CoapClientConnector
+from programmingtheiot.cda.connection.AsyncCoapClientConnector import AsyncCoapClientConnector
 from programmingtheiot.cda.connection.MqttClientConnector import MqttClientConnector
 from programmingtheiot.cda.connection.AsyncCoapServerAdapter import AsyncCoapServerAdapter
 
@@ -61,6 +62,11 @@ class DeviceDataManager(IDataMessageListener):
 			self.configUtil.getBoolean( \
 				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_COAP_SERVER_KEY)
 		
+		# NEW: Enable CoAP client based on configuration
+		self.enableCoapClient = \
+			self.configUtil.getBoolean( \
+				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_COAP_CLIENT_KEY)
+		
 		self.sysPerfMgr = None
 		self.sensorAdapterMgr = None
 		self.actuatorAdapterMgr = None
@@ -80,6 +86,11 @@ class DeviceDataManager(IDataMessageListener):
 		if self.enableCoapServer:
 			self.coapServer = AsyncCoapServerAdapter(dataMsgListener = self)
 			logging.info("Async CoAP server enabled and initialized")
+		
+		# NEW: Initialize CoAP client if enabled (using async version)
+		if self.enableCoapClient:
+			self.coapClient = AsyncCoapClientConnector(dataMsgListener = self)
+			logging.info("Async CoAP client enabled and initialized")
 		
 		# Initialize caches for data
 		self.actuatorResponseCache = {}
