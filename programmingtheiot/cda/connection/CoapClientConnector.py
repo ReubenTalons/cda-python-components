@@ -232,7 +232,8 @@ class CoapClientConnector(IRequestResponseClient):
 		if resource or name:
 			resourcePath = self._createResourcePath(resource, name)
 			
-			logging.info(f"Issuing POST with path: {resourcePath}")
+			# TEMPORARILY DISABLED FOR PERFORMANCE TESTING
+			# logging.info(f"Issuing POST with path: {resourcePath}")
 			
 			# Create POST request
 			request = self.coapClient.mk_request(defines.Codes.POST, path=resourcePath)
@@ -243,14 +244,16 @@ class CoapClientConnector(IRequestResponseClient):
 			if not enableCON:
 				request.type = defines.Types["NON"]
 			
-			logging.info(f"Sending POST with payload: {payload}")
+			# TEMPORARILY DISABLED FOR PERFORMANCE TESTING
+			# logging.info(f"Sending POST with payload: {payload}")
 			
-			# Send request with callback
-			self.coapClient.send_request(request=request, callback=self._onPostResponse, timeout=timeout)
+			# Send request SYNCHRONOUSLY (no callback) for performance testing
+			response = self.coapClient.send_request(request=request, callback=None, timeout=timeout)
 			
 			return True
 		else:
-			logging.warning("Can't send POST - no resource path provided.")
+			# TEMPORARILY DISABLED FOR PERFORMANCE TESTING
+			# logging.warning("Can't send POST - no resource path provided.")
 			return False
 	
 	
@@ -268,7 +271,8 @@ class CoapClientConnector(IRequestResponseClient):
 		if resource or name:
 			resourcePath = self._createResourcePath(resource, name)
 			
-			logging.info(f"Issuing PUT with path: {resourcePath}")
+			# TEMPORARILY DISABLED FOR PERFORMANCE TESTING
+			# logging.info(f"Issuing PUT with path: {resourcePath}")
 			
 			# Create PUT request
 			request = self.coapClient.mk_request(defines.Codes.PUT, path=resourcePath)
@@ -279,12 +283,13 @@ class CoapClientConnector(IRequestResponseClient):
 			if not enableCON:
 				request.type = defines.Types["NON"]
 			
-			# Send request with callback
-			self.coapClient.send_request(request=request, callback=self._onPutResponse, timeout=timeout)
+			# Send request SYNCHRONOUSLY (no callback) for performance testing
+			response = self.coapClient.send_request(request=request, callback=None, timeout=timeout)
 			
 			return True
 		else:
-			logging.warning("Can't send PUT - no resource path provided.")
+			# TEMPORARILY DISABLED FOR PERFORMANCE TESTING
+			# logging.warning("Can't send PUT - no resource path provided.")
 			return False
 	
 	
@@ -512,11 +517,13 @@ class CoapClientConnector(IRequestResponseClient):
 		
 		@param response: The CoAP response object
 		"""
-		if not response:
-			logging.warning("POST response invalid. Ignoring.")
-			return
-		
-		logging.info(f"POST response received: {response.payload}")
+		# TEMPORARILY DISABLED FOR PERFORMANCE TESTING
+		pass
+		# if not response:
+		# 	logging.warning("POST response invalid. Ignoring.")
+		# 	return
+		# 
+		# logging.info(f"POST response received: {response.payload}")
 	
 	
 	def _onPutResponse(self, response):
@@ -526,8 +533,10 @@ class CoapClientConnector(IRequestResponseClient):
 		
 		@param response: The CoAP response object
 		"""
-		if not response:
-			logging.warning("PUT response invalid. Ignoring.")
-			return
-		
-		logging.info(f"PUT response received: {response.payload}")
+		# TEMPORARILY DISABLED FOR PERFORMANCE TESTING
+		pass
+		# if not response:
+		# 	logging.warning("PUT response invalid. Ignoring.")
+		# 	return
+		# 
+		# logging.info(f"PUT response received: {response.payload}")

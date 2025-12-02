@@ -6,26 +6,19 @@
 # 
 # Copyright (c) 2020 - 2025 by Andrew D. King
 # 
-
 import logging
 import unittest
-
 import time
 
 from programmingtheiot.cda.connection.MqttClientConnector import MqttClientConnector
-
 from programmingtheiot.common.ResourceNameEnum import ResourceNameEnum
-
 from programmingtheiot.data.DataUtil import DataUtil
 from programmingtheiot.data.SensorData import SensorData
 
-class MqttClientConnectorTest(unittest.TestCase):
+class MqttClientPerformanceTest(unittest.TestCase):
 	"""
-	This test case class contains very basic unit tests for
-	MqttClientConnector. It should not be considered complete,
-	but serve as a starting point for the student implementing
-	additional functionality within their Programming the IoT
-	environment.
+	Performance test case class for MqttClientConnector.
+	Tests MQTT publish performance with different QoS levels.
 	"""
 	NS_IN_MILLIS = 1000000
 	MAX_TEST_RUNS = 10000
@@ -41,11 +34,11 @@ class MqttClientConnectorTest(unittest.TestCase):
 	def tearDown(self):
 		pass
 
-	@unittest.skip("Ignore for now.")
 	def testConnectAndDisconnect(self):
 		startTime = time.time_ns()
 		
 		self.assertTrue(self.mqttClient.connectClient())
+		time.sleep(1)  # Allow connection to complete
 		self.assertTrue(self.mqttClient.disconnectClient())
 		
 		endTime = time.time_ns()
@@ -53,20 +46,21 @@ class MqttClientConnectorTest(unittest.TestCase):
 		
 		logging.info("Connect and Disconnect: " + str(elapsedMillis) + " ms")
 		
-	@unittest.skip("Ignore for now.")
+	# @unittest.skip("Ignore for now.")
 	def testPublishQoS0(self):
 		self._execTestPublish(self.MAX_TEST_RUNS, 0)
 
-	@unittest.skip("Ignore for now.")
+	# @unittest.skip("Ignore for now.")
 	def testPublishQoS1(self):
 		self._execTestPublish(self.MAX_TEST_RUNS, 1)
 
-	@unittest.skip("Ignore for now.")
+	# @unittest.skip("Ignore for now.")
 	def testPublishQoS2(self):
 		self._execTestPublish(self.MAX_TEST_RUNS, 2)
 
 	def _execTestPublish(self, maxTestRuns: int, qos: int):
 		self.assertTrue(self.mqttClient.connectClient())
+		time.sleep(1)  # Allow connection to complete
 		
 		sensorData = SensorData()
 		payload = DataUtil().sensorDataToJson(sensorData)
@@ -84,9 +78,6 @@ class MqttClientConnectorTest(unittest.TestCase):
 		logging.info( \
 			"\n\tTesting Publish: QoS = %r | msgs = %r | payload size = %r | start = %r | end = %r | elapsed = %r", \
 			qos, maxTestRuns, payloadLen, startTime / 1000, endTime / 1000, elapsedMillis / 1000)
-		
-		#logging.info("Publish message - QoS " + str(qos) + " [" + str(maxTestRuns) + "]: " + str(elapsedMillis) + " ms")
 	
 if __name__ == "__main__":
 	unittest.main()
-	

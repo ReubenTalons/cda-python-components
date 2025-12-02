@@ -264,10 +264,11 @@ class DeviceDataManager(IDataMessageListener):
 	def startManager(self):
 		logging.info("Starting DeviceDataManager...")
 		
-		# NEW: Connect MQTT client and subscribe to topics
+		# NEW: Connect MQTT client
+		# Subscription now handled automatically in MqttClientConnector.onConnect()
 		if self.mqttClient:
 			self.mqttClient.connectClient()
-			self.mqttClient.subscribeToTopic(ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE, callback = None, qos = ConfigConst.DEFAULT_QOS)
+			# self.mqttClient.subscribeToTopic(ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE, callback = None, qos = ConfigConst.DEFAULT_QOS)
 
 		# NEW: Start CoAP server
 		if self.coapServer:
