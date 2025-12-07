@@ -109,8 +109,9 @@ class MqttClientConnector(IPubSubClient):
 					
 					# Allow self-signed certificates for testing
 					self.mqttClient.tls_insecure_set(True)
-			except:
-				logging.warning("Failed to enable TLS encryption. Using unencrypted connection.")
+			except Exception as e:
+				logging.exception("Failed to enable TLS encryption: %s", e)
+				logging.warning("Using unencrypted connection.")
 			
 			# Set callback functions
 			self.mqttClient.on_connect = self.onConnect
@@ -211,14 +212,10 @@ class MqttClientConnector(IPubSubClient):
 		if qos < 0 or qos > 2:
 			qos = ConfigConst.DEFAULT_QOS
 		
-		# publish message - do NOT wait (avoid potential deadlock)
+		# publish message and wait for completion (ENABLED FOR PERFORMANCE TESTING)
 		msgInfo = self.mqttClient.publish(topic = resource.value, payload = msg, qos = qos)
+		msgInfo.wait_for_publish()
 		
-		# COMMENTED OUT to avoid blocking/deadlock (was added in Lab Module 06)
-		# msgInfo.wait_for_publish()
-		
-		# NOTE: The 'True' return no longer guarantees successful publish,
-		# as it will return before the publish may successfully complete
 		return True
 	
 	def subscribeToTopic(self, resource: ResourceNameEnum = None, callback = None, qos: int = ConfigConst.DEFAULT_QOS) -> bool:

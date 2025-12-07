@@ -25,7 +25,7 @@ class CoapClientPerformanceTest(unittest.TestCase):
 	NS_IN_MILLIS = 1000000
 	
 	# NOTE: Reduced to 100 for faster testing
-	MAX_TEST_RUNS = 100
+	MAX_TEST_RUNS = 10000
 	
 	@classmethod
 	def setUpClass(cls):
@@ -69,7 +69,8 @@ class CoapClientPerformanceTest(unittest.TestCase):
 				resource = ResourceNameEnum.CDA_SENSOR_MSG_RESOURCE, 
 				enableCON = useCon, 
 				payload = payload,
-				timeout = 1  # 1 second timeout
+				timeout = 1,
+				
 			)
 			
 		endTime = time.time_ns()

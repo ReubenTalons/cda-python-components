@@ -11,7 +11,7 @@
 #
 [Mqtt.GatewayService]
 credFile       = ./cred/PiotMqttLocalCred.props
-certFile       = ./certs/ca.crt
+certFile       = /home/rain/piot/cda-python-components/certs/ca.crt
 host           = localhost
 port           = 1883
 securePort     = 8883
@@ -29,7 +29,7 @@ host           = localhost
 port           = 5683
 securePort     = 5684
 enableAuth     = False
-enableCrypt    = False
+enableCrypt    = True
 #
 # CDA specific configuration information
 #
