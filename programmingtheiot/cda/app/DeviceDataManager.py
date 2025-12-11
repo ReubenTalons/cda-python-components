@@ -228,6 +228,13 @@ class DeviceDataManager(IDataMessageListener):
 			
 			# store in cache
 			self.sensorDataCache[data.getName()] = data
+			# Publish sensor data to MQTT broker (Ubidots)
+			if self.mqttClient:
+				topic = f"/v1.6/devices/constraineddevice001/{data.getName().lower()}"
+				payload = f'{{"value": {data.getValue()}}}'
+				self.mqttClient.publishMessage(resource=None, msg=payload, qos=0)
+				logging.debug(f"Published sensor data to topic: {topic}")
+
 			
 			self._handleSensorDataAnalysis(data = data)
 			return True
@@ -249,6 +256,13 @@ class DeviceDataManager(IDataMessageListener):
 			
 			# store in cache
 			self.sysPerfDataCache[data.getName()] = data
+			# Publish system performance data to MQTT broker (Ubidots)
+			if self.mqttClient:
+				topic = "/v1.6/devices/constraineddevice001/systemperfmsg"
+				payload = f'{{"cpuutil": {data.getCpuUtilization()}, "memutil": {data.getMemoryUtilization()}}}'
+				self.mqttClient.publishMessage(resource=None, msg=payload, qos=0)
+				logging.debug(f"Published system performance to topic: {topic}")
+
 			
 			return True
 		else:
