@@ -253,7 +253,7 @@ class DeviceDataManager(IDataMessageListener):
 			if self.mqttClient:
 				topic = f"/v1.6/devices/constraineddevice001/{data.getName().lower()}"
 				payload = f'{{"value": {data.getValue()}}}'
-				self.mqttClient.publishMessage(resource=None, msg=payload, qos=0)
+				self.mqttClient.publishMessage(resource=None, msg=payload, qos=0, topic=topic)
 				logging.debug(f"Published sensor data to topic: {topic}")
 
 			
@@ -358,6 +358,7 @@ class DeviceDataManager(IDataMessageListener):
 		"""
 		if self.handleTempChangeOnDevice and data.getTypeID() == ConfigConst.TEMP_SENSOR_TYPE:
 			logging.info("Handle temp change: %s - type ID: %s", str(self.handleTempChangeOnDevice), str(data.getTypeID()))
+			logging.warning(f"🌡️  CURRENT TEMP: {data.getValue():.2f}°C | Floor: {self.triggerHvacTempFloor:.2f}°C | Ceiling: {self.triggerHvacTempCeiling:.2f}°C")
 			
 			ad = ActuatorData(typeID = ConfigConst.HVAC_ACTUATOR_TYPE)
 			ad.setLocationID(data.getLocationID())
@@ -385,6 +386,7 @@ class DeviceDataManager(IDataMessageListener):
 				status_topic = "/v1.6/devices/constraineddevice001/hvac_status"
 				status_payload = f'{{"value": {hvac_status}, "context": {{"status": "{status_message}"}}}}'
 				self.mqttClient.publishMessage(resource=None, msg=status_payload, qos=0, topic=status_topic)
+				logging.info(f"📊 Published HVAC Status: {status_message} (value={hvac_status})")
 			
 			self.handleActuatorCommandMessage(ad)
 	

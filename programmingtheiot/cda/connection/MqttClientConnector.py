@@ -179,7 +179,11 @@ class MqttClientConnector(IPubSubClient):
 			payload = msg.payload.decode('utf-8')
 			data = json.loads(payload)
 			
-			new_value = float(data.get('value', 0))
+			# Handle both dict and direct float value
+			if isinstance(data, dict):
+				new_value = float(data.get('value', 0))
+			else:
+				new_value = float(data)
 			topic = msg.topic
 			
 			logging.info(f"Received threshold control: {topic} = {new_value}")
@@ -231,8 +235,9 @@ class MqttClientConnector(IPubSubClient):
 			callback=self.onActuatorCommandMessage)
 		
 		# Subscribe to threshold control topics (for manual threshold adjustment)
-		floor_control_topic = "/v1.6/devices/constraineddevice001/threshold_floor/lv"
-		ceiling_control_topic = "/v1.6/devices/constraineddevice001/threshold_ceiling/lv"
+		# Try both with and without /lv suffix
+		floor_control_topic = "/v1.6/devices/constraineddevice001/threshold_floor"
+		ceiling_control_topic = "/v1.6/devices/constraineddevice001/threshold_ceiling"
 		
 		self.mqttClient.subscribe(topic=floor_control_topic, qos=self.defaultQos)
 		self.mqttClient.subscribe(topic=ceiling_control_topic, qos=self.defaultQos)
