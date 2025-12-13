@@ -362,32 +362,102 @@ class DeviceDataManager(IDataMessageListener):
 			ad = ActuatorData(typeID = ConfigConst.HVAC_ACTUATOR_TYPE)
 			ad.setLocationID(data.getLocationID())
 			
+			hvac_status = 0  # 0=OFF, 1=HEATING, 2=COOLING
+			status_message = "COMFORT ZONE"
+			
 			if data.getValue() > self.triggerHvacTempCeiling:
 				ad.setCommand(ConfigConst.COMMAND_ON)
 				ad.setValue(self.triggerHvacTempCeiling)
+				hvac_status = 2
+				status_message = "COOLING ACTIVE"
 			elif data.getValue() < self.triggerHvacTempFloor:
 				ad.setCommand(ConfigConst.COMMAND_ON)
 				ad.setValue(self.triggerHvacTempFloor)
+				hvac_status = 1
+				status_message = "HEATING ACTIVE"
 			else:
 				ad.setCommand(ConfigConst.COMMAND_OFF)
-				
+				hvac_status = 0
+				status_message = "COMFORT ZONE"
+			
+			# Publish HVAC status to dashboard
+			if self.mqttClient:
+				status_topic = "/v1.6/devices/constraineddevice001/hvac_status"
+				status_payload = f'{{"value": {hvac_status}, "context": {{"status": "{status_message}"}}}}'
+				self.mqttClient.publishMessage(resource=None, msg=status_payload, qos=0, topic=status_topic)
+			
 			self.handleActuatorCommandMessage(ad)
 	
 	def _handleThresholdUpdate(self, data: ActuatorData):
 		"""
-		LAB MODULE 12: Handles adaptive threshold updates from GDA.
+		LAB MODULE 12: Handles adaptive threshold updates.
 		
-		Parses threshold values from actuator command and updates internal thresholds.
-		Expected format: "HvacActuator-THRESHOLDS-FLOOR=XX.XX-CEILING=YY.YY"
+		Supports two formats:
+		1. Full update: "HvacActuator-THRESHOLDS-FLOOR=XX.XX-CEILING=YY.YY"
+		2. Manual single: "HvacActuator-MANUAL-FLOOR=XX.XX" or "HvacActuator-MANUAL-CEILING=XX.XX"
 		
 		@param data The ActuatorData containing threshold update information
 		"""
 		try:
-			# Parse threshold values from name field
 			name = data.getName()
 			logging.info(f"Parsing threshold update from: {name}")
 			
-			# Extract FLOOR value
+			# Check if this is a manual single-value update
+			if "MANUAL-FLOOR=" in name:
+				# Extract just the floor value
+				floor_start = name.index("MANUAL-FLOOR=") + 13
+				new_floor = float(name[floor_start:])
+				new_ceiling = self.triggerHvacTempCeiling  # Keep existing ceiling
+				
+				old_floor = self.triggerHvacTempFloor
+				self.triggerHvacTempFloor = new_floor
+				self.thresholdUpdateCount += 1
+				
+				logging.warning("=" * 70)
+				logging.warning("✅ MANUAL THRESHOLD UPDATE - FLOOR")
+				logging.warning(f"  Update #{self.thresholdUpdateCount}")
+				logging.warning(f"  OLD Floor: {old_floor:.2f}°C")
+				logging.warning(f"  NEW Floor: {new_floor:.2f}°C")
+				logging.warning(f"  Ceiling unchanged: {new_ceiling:.2f}°C")
+				logging.warning("=" * 70)
+				
+				# Publish event
+				self._publishThresholdEvent(
+					event_type="MANUAL_FLOOR_ADJUSTMENT",
+					floor_temp=new_floor,
+					ceiling_temp=new_ceiling,
+					reason=f"Manual update #{self.thresholdUpdateCount}"
+				)
+				return
+				
+			elif "MANUAL-CEILING=" in name:
+				# Extract just the ceiling value
+				ceiling_start = name.index("MANUAL-CEILING=") + 15
+				new_ceiling = float(name[ceiling_start:])
+				new_floor = self.triggerHvacTempFloor  # Keep existing floor
+				
+				old_ceiling = self.triggerHvacTempCeiling
+				self.triggerHvacTempCeiling = new_ceiling
+				self.thresholdUpdateCount += 1
+				
+				logging.warning("=" * 70)
+				logging.warning("✅ MANUAL THRESHOLD UPDATE - CEILING")
+				logging.warning(f"  Update #{self.thresholdUpdateCount}")
+				logging.warning(f"  OLD Ceiling: {old_ceiling:.2f}°C")
+				logging.warning(f"  NEW Ceiling: {new_ceiling:.2f}°C")
+				logging.warning(f"  Floor unchanged: {new_floor:.2f}°C")
+				logging.warning("=" * 70)
+				
+				# Publish event
+				self._publishThresholdEvent(
+					event_type="MANUAL_CEILING_ADJUSTMENT",
+					floor_temp=new_floor,
+					ceiling_temp=new_ceiling,
+					reason=f"Manual update #{self.thresholdUpdateCount}"
+				)
+				return
+			
+			# Original full format: FLOOR=XX-CEILING=YY
 			if "FLOOR=" in name:
 				floor_start = name.index("FLOOR=") + 6
 				floor_end = name.index("-CEILING")
@@ -413,10 +483,48 @@ class DeviceDataManager(IDataMessageListener):
 				logging.warning("  System will now use updated thresholds for HVAC control")
 				logging.warning("=" * 70)
 				
+				# Publish threshold change event to Ubidots dashboard
+				self._publishThresholdEvent(
+					event_type="THRESHOLD_ADJUSTED",
+					floor_temp=new_floor,
+					ceiling_temp=new_ceiling,
+					reason=f"Update #{self.thresholdUpdateCount}"
+				)
+				
 		except Exception as e:
 			logging.error(f"❌ Failed to parse threshold update: {e}")
 			logging.error(f"Actuator data name: {data.getName()}")
 		
+
+	def _publishThresholdEvent(self, event_type: str, floor_temp: float, ceiling_temp: float, reason: str = ""):
+		"""
+		Publish threshold change events to Ubidots for dashboard visualization.
+		Publishes floor and ceiling as separate variables for better dashboard display.
+		"""
+		if self.mqttClient:
+			try:
+				# Publish floor threshold
+				floor_topic = "/v1.6/devices/constraineddevice001/threshold_floor"
+				floor_payload = f'{{"value": {floor_temp}}}'
+				self.mqttClient.publishMessage(resource=None, msg=floor_payload, qos=0, topic=floor_topic)
+				
+				# Publish ceiling threshold
+				ceiling_topic = "/v1.6/devices/constraineddevice001/threshold_ceiling"
+				ceiling_payload = f'{{"value": {ceiling_temp}}}'
+				self.mqttClient.publishMessage(resource=None, msg=ceiling_payload, qos=0, topic=ceiling_topic)
+				
+				# Publish event log with context
+				event_topic = "/v1.6/devices/constraineddevice001/threshold_events"
+				event_message = f"{event_type}: Floor={floor_temp}°C, Ceiling={ceiling_temp}°C"
+				if reason:
+					event_message += f" ({reason})"
+				event_payload = f'{{"value": 1, "context": {{"message": "{event_message}"}}}}'
+				self.mqttClient.publishMessage(resource=None, msg=event_payload, qos=0, topic=event_topic)
+				
+				logging.info(f"Published threshold update: Floor={floor_temp}°C, Ceiling={ceiling_temp}°C")
+			except Exception as e:
+				logging.error(f"Failed to publish threshold event: {e}")
+
 	def _handleUpstreamTransmission(self, resource: ResourceNameEnum = None, msg: str = None):
 		"""
 		Call this from handleActuatorCommandResponse(), handlesensorMessage(), and handleSystemPerformanceMessage()

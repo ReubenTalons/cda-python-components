@@ -168,6 +168,45 @@ class MqttClientConnector(IPubSubClient):
 			
 			return False
 		
+
+	def onThresholdControlMessage(self, client, userdata, msg):
+		"""
+		Callback for threshold control messages from Ubidots dashboard sliders.
+		Parses floor/ceiling values and triggers threshold update.
+		"""
+		try:
+			import json
+			payload = msg.payload.decode('utf-8')
+			data = json.loads(payload)
+			
+			new_value = float(data.get('value', 0))
+			topic = msg.topic
+			
+			logging.info(f"Received threshold control: {topic} = {new_value}")
+			
+			# Determine which threshold changed
+			if 'threshold_floor' in topic:
+				threshold_type = 'floor'
+			elif 'threshold_ceiling' in topic:
+				threshold_type = 'ceiling'
+			else:
+				logging.warning(f"Unknown threshold control topic: {topic}")
+				return
+			
+			# Create actuator data with manual threshold update format
+			from programmingtheiot.data.ActuatorData import ActuatorData
+			actuator_data = ActuatorData()
+			
+			# Format: "HvacActuator-MANUAL-FLOOR=XX.XX" or "HvacActuator-MANUAL-CEILING=XX.XX"
+			actuator_data.setName(f"HvacActuator-MANUAL-{threshold_type.upper()}={new_value:.2f}")
+			
+			# Pass to data message listener (DeviceDataManager)
+			if self.dataMsgListener:
+				self.dataMsgListener.handleActuatorCommandMessage(actuator_data)
+			
+		except Exception as e:
+			logging.exception(f"Failed to process threshold control message: {e}")
+
 	def onConnect(self, client, userdata, flags, rc):
 		logging.info('[Callback] Connected to MQTT broker. Result code: ' + str(rc))
 		
@@ -190,6 +229,22 @@ class MqttClientConnector(IPubSubClient):
 		self.mqttClient.message_callback_add(
 			sub=ubidots_actuator_topic,
 			callback=self.onActuatorCommandMessage)
+		
+		# Subscribe to threshold control topics (for manual threshold adjustment)
+		floor_control_topic = "/v1.6/devices/constraineddevice001/threshold_floor/lv"
+		ceiling_control_topic = "/v1.6/devices/constraineddevice001/threshold_ceiling/lv"
+		
+		self.mqttClient.subscribe(topic=floor_control_topic, qos=self.defaultQos)
+		self.mqttClient.subscribe(topic=ceiling_control_topic, qos=self.defaultQos)
+		logging.info(f"Subscribed to threshold control topics for manual adjustment")
+		
+		# Add callbacks for threshold controls
+		self.mqttClient.message_callback_add(
+			sub=floor_control_topic,
+			callback=self.onThresholdControlMessage)
+		self.mqttClient.message_callback_add(
+			sub=ceiling_control_topic,
+			callback=self.onThresholdControlMessage)
 		
 	def onDisconnect(self, client, userdata, rc):
 		logging.info('MQTT client disconnected from broker: ' + str(client))
