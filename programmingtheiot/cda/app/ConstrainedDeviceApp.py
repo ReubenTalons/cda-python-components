@@ -9,20 +9,14 @@
 # provided within in order to meet the needs of your specific
 # Programming the Internet of Things project.
 # 
-
 import argparse
 import logging
 import traceback
-
 from time import sleep
-
 import programmingtheiot.common.ConfigConst as ConfigConst
-
 from programmingtheiot.common.ConfigUtil import ConfigUtil
 from programmingtheiot.cda.app.DeviceDataManager import DeviceDataManager
-
 logging.basicConfig(format = '%(asctime)s:%(name)s:%(levelname)s:%(message)s', level = logging.DEBUG)
-
 class ConstrainedDeviceApp():
 	"""
 	Definition of the ConstrainedDeviceApp class.
@@ -68,12 +62,11 @@ class ConstrainedDeviceApp():
 		self.isStarted = False
 		
 		logging.info("CDA stopped with exit code %s.", str(code))
-
 def main():
 	"""
 	Main function definition for running client as application.
 	
-	Current implementation runs for 65 seconds then exits.
+	Current implementation runs for 600 seconds (10 minutes) then exits.
 	"""
 	argParser = argparse.ArgumentParser( \
 		description = 'CDA used for generating telemetry - Programming the IoT.')
@@ -106,9 +99,9 @@ def main():
 			while (True):
 				sleep(5)
 		else:
-			# run CDA for ~65 seconds then exit
+			# run CDA for ~10 minutes (600 seconds) then exit - FOR DEMO
 			if (cda.isAppStarted()):
-				sleep(65)
+				sleep(600)
 				cda.stopApp(0)
 			
 	except KeyboardInterrupt:
@@ -124,7 +117,6 @@ def main():
 			cda.stopApp(-2)
 	
 	logging.info('Exiting CDA.')
-
 if __name__ == '__main__':
 	"""
 	Attribute definition for when invoking as app via command line

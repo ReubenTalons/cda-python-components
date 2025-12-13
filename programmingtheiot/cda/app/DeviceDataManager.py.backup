@@ -19,7 +19,9 @@ from programmingtheiot.common.IDataMessageListener import IDataMessageListener
 from programmingtheiot.common.ResourceNameEnum import ResourceNameEnum
 
 from programmingtheiot.cda.connection.CoapClientConnector import CoapClientConnector
+from programmingtheiot.cda.connection.AsyncCoapClientConnector import AsyncCoapClientConnector
 from programmingtheiot.cda.connection.MqttClientConnector import MqttClientConnector
+from programmingtheiot.cda.connection.AsyncCoapServerAdapter import AsyncCoapServerAdapter
 
 from programmingtheiot.cda.system.ActuatorAdapterManager import ActuatorAdapterManager
 from programmingtheiot.cda.system.SensorAdapterManager import SensorAdapterManager
@@ -34,6 +36,7 @@ class DeviceDataManager(IDataMessageListener):
 	"""
 	Shell representation of class for student implementation.
 	
+	LAB MODULE 12: Enhanced with adaptive threshold management for intelligent HVAC control.
 	"""
 	
 	def __init__(self):
@@ -54,6 +57,16 @@ class DeviceDataManager(IDataMessageListener):
 		self.enableMqttClient = \
 			self.configUtil.getBoolean( \
 				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_MQTT_CLIENT_KEY)
+
+		# NEW: Enable CoAP server based on configuration
+		self.enableCoapServer = \
+			self.configUtil.getBoolean( \
+				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_COAP_SERVER_KEY)
+		
+		# NEW: Enable CoAP client based on configuration
+		self.enableCoapClient = \
+			self.configUtil.getBoolean( \
+				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_COAP_CLIENT_KEY)
 		
 		self.sysPerfMgr = None
 		self.sensorAdapterMgr = None
@@ -69,6 +82,16 @@ class DeviceDataManager(IDataMessageListener):
 			self.mqttClient = MqttClientConnector()
 			self.mqttClient.setDataMessageListener(self)
 			logging.info("MQTT client enabled and initialized")
+
+		# NEW: Initialize CoAP server if enabled
+		if self.enableCoapServer:
+			self.coapServer = AsyncCoapServerAdapter(dataMsgListener = self)
+			logging.info("Async CoAP server enabled and initialized")
+		
+		# NEW: Initialize CoAP client if enabled (using async version)
+		if self.enableCoapClient:
+			self.coapClient = AsyncCoapClientConnector(dataMsgListener = self)
+			logging.info("Async CoAP client enabled and initialized")
 		
 		# Initialize caches for data
 		self.actuatorResponseCache = {}
@@ -100,6 +123,11 @@ class DeviceDataManager(IDataMessageListener):
 		self.triggerHvacTempCeiling = \
 			self.configUtil.getFloat( \
 				ConfigConst.CONSTRAINED_DEVICE, ConfigConst.TRIGGER_HVAC_TEMP_CEILING_KEY)
+		
+		# LAB MODULE 12: Track threshold update count
+		self.thresholdUpdateCount = 0
+		
+		logging.info(f"Initial HVAC thresholds: Floor={self.triggerHvacTempFloor}°C, Ceiling={self.triggerHvacTempCeiling}°C")
 		
 	def getLatestActuatorDataResponseFromCache(self, name: str = None) -> ActuatorData:
 		"""
@@ -139,14 +167,29 @@ class DeviceDataManager(IDataMessageListener):
 		This callback method will be invoked by the connection that's handling
 		an incoming ActuatorData command message.
 		
+		LAB MODULE 12: Enhanced to detect and process threshold update commands from GDA.
+		
 		@param data The incoming ActuatorData command message.
 		@return ActuatorData
 		"""
 		logging.info("Actuator data: " + str(data))
 		
 		if data:
-			logging.info("Processing actuator command message.")
-			return self.actuatorAdapterMgr.sendActuatorCommand(data)
+			# LAB MODULE 12: Check if this is a threshold update command from GDA
+			if data.getName() and "THRESHOLDS" in data.getName():
+				logging.warning("🔧 THRESHOLD UPDATE COMMAND RECEIVED FROM GDA!")
+				self._handleThresholdUpdate(data)
+				
+				# Create response indicating threshold update was processed
+				responseData = ActuatorData(typeID=ConfigConst.HVAC_ACTUATOR_TYPE)
+				responseData.setName("ThresholdUpdateResponse")
+				responseData.setCommand(ConfigConst.COMMAND_OFF)
+				responseData.setAsResponse()
+				return responseData
+			else:
+				# Normal actuator command processing
+				logging.info("Processing actuator command message.")
+				return self.actuatorAdapterMgr.sendActuatorCommand(data)
 		else:
 			logging.warning("Incoming actuator command is invalid (null). Ignoring.")
 			return None
@@ -206,6 +249,13 @@ class DeviceDataManager(IDataMessageListener):
 			
 			# store in cache
 			self.sensorDataCache[data.getName()] = data
+			# Publish sensor data to MQTT broker (Ubidots)
+			if self.mqttClient:
+				topic = f"/v1.6/devices/constraineddevice001/{data.getName().lower()}"
+				payload = f'{{"value": {data.getValue()}}}'
+				self.mqttClient.publishMessage(resource=None, msg=payload, qos=0)
+				logging.debug(f"Published sensor data to topic: {topic}")
+
 			
 			self._handleSensorDataAnalysis(data = data)
 			return True
@@ -227,6 +277,13 @@ class DeviceDataManager(IDataMessageListener):
 			
 			# store in cache
 			self.sysPerfDataCache[data.getName()] = data
+			# Publish system performance data to MQTT broker (Ubidots)
+			if self.mqttClient:
+				topic = "/v1.6/devices/constraineddevice001/systemperfmsg"
+				payload = f'{{"cpuutil": {data.getCpuUtilization()}, "memutil": {data.getMemoryUtilization()}}}'
+				self.mqttClient.publishMessage(resource=None, msg=payload, qos=0)
+				logging.debug(f"Published system performance to topic: {topic}")
+
 			
 			return True
 		else:
@@ -242,10 +299,15 @@ class DeviceDataManager(IDataMessageListener):
 	def startManager(self):
 		logging.info("Starting DeviceDataManager...")
 		
-		# NEW: Connect MQTT client and subscribe to topics
+		# NEW: Connect MQTT client
+		# Subscription now handled automatically in MqttClientConnector.onConnect()
 		if self.mqttClient:
 			self.mqttClient.connectClient()
-			self.mqttClient.subscribeToTopic(ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE, callback = None, qos = ConfigConst.DEFAULT_QOS)
+			# self.mqttClient.subscribeToTopic(ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE, callback = None, qos = ConfigConst.DEFAULT_QOS)
+
+		# NEW: Start CoAP server
+		if self.coapServer:
+			self.coapServer.startServer()
 		
 		if self.sysPerfMgr:
 			self.sysPerfMgr.startManager()
@@ -262,6 +324,10 @@ class DeviceDataManager(IDataMessageListener):
 		if self.mqttClient:
 			self.mqttClient.unsubscribeFromTopic(ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE)
 			self.mqttClient.disconnectClient()
+
+		# NEW: Stop CoAP server
+		if self.coapServer:
+			self.coapServer.stopServer()
 		
 		if self.sysPerfMgr:
 			self.sysPerfMgr.stopManager()
@@ -306,6 +372,50 @@ class DeviceDataManager(IDataMessageListener):
 				ad.setCommand(ConfigConst.COMMAND_OFF)
 				
 			self.handleActuatorCommandMessage(ad)
+	
+	def _handleThresholdUpdate(self, data: ActuatorData):
+		"""
+		LAB MODULE 12: Handles adaptive threshold updates from GDA.
+		
+		Parses threshold values from actuator command and updates internal thresholds.
+		Expected format: "HvacActuator-THRESHOLDS-FLOOR=XX.XX-CEILING=YY.YY"
+		
+		@param data The ActuatorData containing threshold update information
+		"""
+		try:
+			# Parse threshold values from name field
+			name = data.getName()
+			logging.info(f"Parsing threshold update from: {name}")
+			
+			# Extract FLOOR value
+			if "FLOOR=" in name:
+				floor_start = name.index("FLOOR=") + 6
+				floor_end = name.index("-CEILING")
+				new_floor = float(name[floor_start:floor_end])
+				
+				# Extract CEILING value  
+				ceiling_start = name.index("CEILING=") + 8
+				new_ceiling = float(name[ceiling_start:])
+				
+				# Update thresholds
+				old_floor = self.triggerHvacTempFloor
+				old_ceiling = self.triggerHvacTempCeiling
+				
+				self.triggerHvacTempFloor = new_floor
+				self.triggerHvacTempCeiling = new_ceiling
+				self.thresholdUpdateCount += 1
+				
+				logging.warning("=" * 70)
+				logging.warning("✅ ADAPTIVE THRESHOLDS UPDATED!")
+				logging.warning(f"  Update #{self.thresholdUpdateCount}")
+				logging.warning(f"  OLD: Floor={old_floor:.2f}°C, Ceiling={old_ceiling:.2f}°C")
+				logging.warning(f"  NEW: Floor={new_floor:.2f}°C, Ceiling={new_ceiling:.2f}°C")
+				logging.warning("  System will now use updated thresholds for HVAC control")
+				logging.warning("=" * 70)
+				
+		except Exception as e:
+			logging.error(f"❌ Failed to parse threshold update: {e}")
+			logging.error(f"Actuator data name: {data.getName()}")
 		
 	def _handleUpstreamTransmission(self, resource: ResourceNameEnum = None, msg: str = None):
 		"""

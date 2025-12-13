@@ -181,6 +181,16 @@ class MqttClientConnector(IPubSubClient):
 			sub = ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE.value,
 			callback = self.onActuatorCommandMessage)
 		
+		# Subscribe to Ubidots actuator command topic (for cloud-to-device control)
+		ubidots_actuator_topic = "/v1.6/devices/constraineddevice001/hvacactuator"
+		self.mqttClient.subscribe(topic=ubidots_actuator_topic, qos=self.defaultQos)
+		logging.info(f"Subscribed to Ubidots actuator topic: {ubidots_actuator_topic}")
+		
+		# Add callback for Ubidots actuator commands
+		self.mqttClient.message_callback_add(
+			sub=ubidots_actuator_topic,
+			callback=self.onActuatorCommandMessage)
+		
 	def onDisconnect(self, client, userdata, rc):
 		logging.info('MQTT client disconnected from broker: ' + str(client))
 		
@@ -220,17 +230,25 @@ class MqttClientConnector(IPubSubClient):
 			except:
 				logging.exception("Failed to convert incoming actuation command payload to ActuatorData: ")
 	
-	def publishMessage(self, resource: ResourceNameEnum = None, msg: str = None, qos: int = ConfigConst.DEFAULT_QOS) -> bool:
-		# check validity of resource (topic)
-		if not resource:
-			# TEMPORARILY DISABLED FOR PERFORMANCE TESTING
+	def publishMessage(self, resource: ResourceNameEnum = None, msg: str = None, qos: int = ConfigConst.DEFAULT_QOS, topic: str = None) -> bool:
+		# Determine the topic to use
+		topic_to_publish = None
+		
+		# If a raw topic string is provided, use it (for Ubidots)
+		if topic:
+			topic_to_publish = topic
+		# Otherwise, use the ResourceNameEnum
+		elif resource:
+			topic_to_publish = resource.value
+		else:
+			# No topic specified
 			# logging.warning('No topic specified. Cannot publish message.')
 			return False
 		
 		# check validity of message
 		if not msg:
 			# TEMPORARILY DISABLED FOR PERFORMANCE TESTING
-			# logging.warning('No message specified. Cannot publish message to topic: ' + resource.value)
+			# logging.warning('No message specified. Cannot publish message to topic: ' + topic_to_publish)
 			return False
 		
 		# check validity of QoS - set to default if necessary
@@ -238,7 +256,7 @@ class MqttClientConnector(IPubSubClient):
 			qos = ConfigConst.DEFAULT_QOS
 		
 		# publish message and wait for completion (ENABLED FOR PERFORMANCE TESTING)
-		msgInfo = self.mqttClient.publish(topic = resource.value, payload = msg, qos = qos)
+		msgInfo = self.mqttClient.publish(topic = topic_to_publish, payload = msg, qos = qos)
 		msgInfo.wait_for_publish()
 		
 		return True

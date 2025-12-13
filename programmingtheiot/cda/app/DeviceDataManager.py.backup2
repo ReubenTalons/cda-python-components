@@ -36,6 +36,7 @@ class DeviceDataManager(IDataMessageListener):
 	"""
 	Shell representation of class for student implementation.
 	
+	LAB MODULE 12: Enhanced with adaptive threshold management for intelligent HVAC control.
 	"""
 	
 	def __init__(self):
@@ -123,6 +124,11 @@ class DeviceDataManager(IDataMessageListener):
 			self.configUtil.getFloat( \
 				ConfigConst.CONSTRAINED_DEVICE, ConfigConst.TRIGGER_HVAC_TEMP_CEILING_KEY)
 		
+		# LAB MODULE 12: Track threshold update count
+		self.thresholdUpdateCount = 0
+		
+		logging.info(f"Initial HVAC thresholds: Floor={self.triggerHvacTempFloor}°C, Ceiling={self.triggerHvacTempCeiling}°C")
+		
 	def getLatestActuatorDataResponseFromCache(self, name: str = None) -> ActuatorData:
 		"""
 		Retrieves the named actuator data (response) item from the internal data cache.
@@ -161,14 +167,29 @@ class DeviceDataManager(IDataMessageListener):
 		This callback method will be invoked by the connection that's handling
 		an incoming ActuatorData command message.
 		
+		LAB MODULE 12: Enhanced to detect and process threshold update commands from GDA.
+		
 		@param data The incoming ActuatorData command message.
 		@return ActuatorData
 		"""
 		logging.info("Actuator data: " + str(data))
 		
 		if data:
-			logging.info("Processing actuator command message.")
-			return self.actuatorAdapterMgr.sendActuatorCommand(data)
+			# LAB MODULE 12: Check if this is a threshold update command from GDA
+			if data.getName() and "THRESHOLDS" in data.getName():
+				logging.warning("🔧 THRESHOLD UPDATE COMMAND RECEIVED FROM GDA!")
+				self._handleThresholdUpdate(data)
+				
+				# Create response indicating threshold update was processed
+				responseData = ActuatorData(typeID=ConfigConst.HVAC_ACTUATOR_TYPE)
+				responseData.setName("ThresholdUpdateResponse")
+				responseData.setCommand(ConfigConst.COMMAND_OFF)
+				responseData.setAsResponse()
+				return responseData
+			else:
+				# Normal actuator command processing
+				logging.info("Processing actuator command message.")
+				return self.actuatorAdapterMgr.sendActuatorCommand(data)
 		else:
 			logging.warning("Incoming actuator command is invalid (null). Ignoring.")
 			return None
@@ -228,6 +249,13 @@ class DeviceDataManager(IDataMessageListener):
 			
 			# store in cache
 			self.sensorDataCache[data.getName()] = data
+			# Publish sensor data to MQTT broker (Ubidots)
+			if self.mqttClient:
+				topic = f"/v1.6/devices/constraineddevice001/{data.getName().lower()}"
+				payload = f'{{"value": {data.getValue()}}}'
+				self.mqttClient.publishMessage(resource=None, msg=payload, qos=0, topic=topic)
+				logging.debug(f"Published sensor data to topic: {topic}")
+
 			
 			self._handleSensorDataAnalysis(data = data)
 			return True
@@ -249,6 +277,13 @@ class DeviceDataManager(IDataMessageListener):
 			
 			# store in cache
 			self.sysPerfDataCache[data.getName()] = data
+			# Publish system performance data to MQTT broker (Ubidots)
+			if self.mqttClient:
+				topic = "/v1.6/devices/constraineddevice001/systemperfmsg"
+				payload = f'{{"cpuutil": {data.getCpuUtilization()}, "memutil": {data.getMemoryUtilization()}}}'
+				self.mqttClient.publishMessage(resource=None, msg=payload, qos=0, topic=topic)
+				logging.debug(f"Published system performance to topic: {topic}")
+
 			
 			return True
 		else:
@@ -337,6 +372,50 @@ class DeviceDataManager(IDataMessageListener):
 				ad.setCommand(ConfigConst.COMMAND_OFF)
 				
 			self.handleActuatorCommandMessage(ad)
+	
+	def _handleThresholdUpdate(self, data: ActuatorData):
+		"""
+		LAB MODULE 12: Handles adaptive threshold updates from GDA.
+		
+		Parses threshold values from actuator command and updates internal thresholds.
+		Expected format: "HvacActuator-THRESHOLDS-FLOOR=XX.XX-CEILING=YY.YY"
+		
+		@param data The ActuatorData containing threshold update information
+		"""
+		try:
+			# Parse threshold values from name field
+			name = data.getName()
+			logging.info(f"Parsing threshold update from: {name}")
+			
+			# Extract FLOOR value
+			if "FLOOR=" in name:
+				floor_start = name.index("FLOOR=") + 6
+				floor_end = name.index("-CEILING")
+				new_floor = float(name[floor_start:floor_end])
+				
+				# Extract CEILING value  
+				ceiling_start = name.index("CEILING=") + 8
+				new_ceiling = float(name[ceiling_start:])
+				
+				# Update thresholds
+				old_floor = self.triggerHvacTempFloor
+				old_ceiling = self.triggerHvacTempCeiling
+				
+				self.triggerHvacTempFloor = new_floor
+				self.triggerHvacTempCeiling = new_ceiling
+				self.thresholdUpdateCount += 1
+				
+				logging.warning("=" * 70)
+				logging.warning("✅ ADAPTIVE THRESHOLDS UPDATED!")
+				logging.warning(f"  Update #{self.thresholdUpdateCount}")
+				logging.warning(f"  OLD: Floor={old_floor:.2f}°C, Ceiling={old_ceiling:.2f}°C")
+				logging.warning(f"  NEW: Floor={new_floor:.2f}°C, Ceiling={new_ceiling:.2f}°C")
+				logging.warning("  System will now use updated thresholds for HVAC control")
+				logging.warning("=" * 70)
+				
+		except Exception as e:
+			logging.error(f"❌ Failed to parse threshold update: {e}")
+			logging.error(f"Actuator data name: {data.getName()}")
 		
 	def _handleUpstreamTransmission(self, resource: ResourceNameEnum = None, msg: str = None):
 		"""
@@ -346,5 +425,21 @@ class DeviceDataManager(IDataMessageListener):
 		2) Act on msg: If # 1 is true, send message upstream using one (or both) client connections.
 		"""
 		logging.info("Upstream transmission invoked for resource: " + str(resource))
-		# For now, basic implementation - will be expanded in Part III
-		pass
+		
+		# Publish actuator responses to Ubidots
+		if resource == ResourceNameEnum.CDA_ACTUATOR_RESPONSE_RESOURCE and self.mqttClient:
+			# Parse the actuator data from JSON to get details
+			try:
+				import json
+				data_dict = json.loads(msg)
+				actuator_name = data_dict.get('name', 'unknown').lower()
+				actuator_value = data_dict.get('value', 0)
+				actuator_command = data_dict.get('command', 0)
+				
+				# Publish to Ubidots with actuator name
+				topic = f"/v1.6/devices/constraineddevice001/{actuator_name}"
+				payload = f'{{"value": {actuator_value}, "command": {actuator_command}}}'
+				self.mqttClient.publishMessage(resource=None, msg=payload, qos=0, topic=topic)
+				logging.debug(f"Published actuator response to topic: {topic}")
+			except Exception as e:
+				logging.error(f"Failed to publish actuator response: {e}")

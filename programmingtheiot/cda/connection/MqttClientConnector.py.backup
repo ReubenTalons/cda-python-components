@@ -69,6 +69,26 @@ class MqttClientConnector(IPubSubClient):
 			self.config.getProperty( \
 				ConfigConst.MQTT_GATEWAY_SERVICE, ConfigConst.CERT_FILE_KEY)
 		
+		# Authentication configuration
+		self.enableAuth = \
+			self.config.getBoolean( \
+				ConfigConst.MQTT_GATEWAY_SERVICE, ConfigConst.ENABLE_AUTH_KEY)
+		
+		self.username = None
+		self.password = None
+		
+		if self.enableAuth:
+			# Load credentials from credential file
+			credentials = self.config.getCredentials(ConfigConst.MQTT_GATEWAY_SERVICE)
+			if credentials:
+				self.username = credentials.get('username')
+				self.password = credentials.get(ConfigConst.USER_NAME_TOKEN_KEY)
+			
+			if self.username and self.password:
+				logging.info("MQTT authentication enabled")
+			else:
+				logging.warning("MQTT auth enabled but credentials not found")
+		
 		self.mqttClient = None
 		
 		if not clientID:
@@ -92,6 +112,11 @@ class MqttClientConnector(IPubSubClient):
 		if not self.mqttClient:
 			# Create MQTT client with clean session
 			self.mqttClient = mqttClient.Client(client_id = self.clientID, clean_session = True)
+			
+			# Set authentication if enabled
+			if self.enableAuth and self.username and self.password:
+				logging.info("Setting MQTT authentication credentials")
+				self.mqttClient.username_pw_set(self.username, self.password)
 			
 			try:
 				if self.enableEncryption:
